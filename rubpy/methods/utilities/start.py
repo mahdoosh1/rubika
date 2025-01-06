@@ -2,21 +2,32 @@ from ... import exceptions
 from ...crypto import Crypto
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
+import rubpy
 
 
 class Start:
-    async def start(self, phone_number: str = None):
+    async def start(self: "rubpy.Client", phone_number: str = None):
+        """
+        Start the RubPy client, handling user registration if necessary.
+
+        Args:
+        - phone_number (str): The phone number to use for starting the client.
+
+        Returns:
+        - The initialized client.
+        """
         if not hasattr(self, 'connection'):
             await self.connect()
 
         try:
-            #self._logger.info('user info', extra={'data': await self.get_me()})
             self.decode_auth = Crypto.decode_auth(self.auth) if self.auth is not None else None
             self.import_key = pkcs1_15.new(RSA.import_key(self.private_key.encode())) if self.private_key is not None else None
-            await self.get_me()
+            result = await self.get_me()
+            self.guid = result.user.user_guid
+            self.logger.info('user', extra={'guid': result})
 
         except exceptions.NotRegistered:
-            #self._logger.debug('user not registered!')
+            self.logger.debug('user not registered!')
             if phone_number is None:
                 phone_number = input('Phone Number: ')
                 is_phone_number_true = True
@@ -66,7 +77,7 @@ class Start:
                         phone_number=result.user.phone,
                         private_key=self.private_key)
 
-                    await self.register_device()
+                    await self.register_device(device_model=self.name)
                     break
 
         return self

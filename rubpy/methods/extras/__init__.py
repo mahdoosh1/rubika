@@ -6,6 +6,9 @@ from .get_info import GetInfo
 from .join import Join
 from .get_related_objects import GetRelatedObjects
 from .get_transcription import GetTranscription
+from .user_is_admin import UserIsAdmin
+from .report_object import ReportObject
+from.transcribe_voice import TranscribeVoice
 
 
 class Exctras(
@@ -17,5 +20,8 @@ class Exctras(
     Join,
     GetRelatedObjects,
     GetTranscription,
+    UserIsAdmin,
+    ReportObject,
+    TranscribeVoice,
 ):
     pass

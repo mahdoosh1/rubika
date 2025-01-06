@@ -1,21 +1,3 @@
-#  Pyrogram - Telegram MTProto API Client Library for Python
-#  Copyright (C) 2017-present Dan <https://github.com/delivrance>
-#
-#  This file is part of Pyrogram.
-#
-#  Pyrogram is free software: you can redistribute it and/or modify
-#  it under the terms of the GNU Lesser General Public License as published
-#  by the Free Software Foundation, either version 3 of the License, or
-#  (at your option) any later version.
-#
-#  Pyrogram is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU Lesser General Public License for more details.
-#
-#  You should have received a copy of the GNU Lesser General Public License
-#  along with Pyrogram.  If not, see <http://www.gnu.org/licenses/>.
-
 import asyncio
 import functools
 import inspect
@@ -23,9 +5,20 @@ import threading
 
 from rubpy import types
 from rubpy.methods import Methods
-
+from rubpy.rubino import Rubino
 
 def async_to_sync(obj, name):
+    """
+    Wrap an asynchronous function or asynchronous generator method
+    to make it synchronous.
+
+    Parameters:
+    - obj: Object containing the method.
+    - name: Name of the method to wrap.
+
+    Returns:
+    Wrapped synchronous function or generator.
+    """
     function = getattr(obj, name)
     main_loop = asyncio.get_event_loop()
 
@@ -84,32 +77,34 @@ def async_to_sync(obj, name):
 
     setattr(obj, name, async_to_sync_wrap)
 
+def wrap_methods(source):
+    """
+    Wrap asynchronous methods in a class to make them synchronous.
 
-def wrap(source):
+    Parameters:
+    - source: Class containing asynchronous methods.
+    """
     for name in dir(source):
         method = getattr(source, name)
 
-        if not name.startswith("_"):
-            if inspect.iscoroutinefunction(method) or inspect.isasyncgenfunction(method):
-                async_to_sync(source, name)
+        if not name.startswith("_") and (inspect.iscoroutinefunction(method) or inspect.isasyncgenfunction(method)):
+            async_to_sync(source, name)
 
+def wrap_types_methods():
+    """
+    Wrap asynchronous methods in types' classes to make them synchronous.
+    """
+    for class_name in dir(types):
+        cls = getattr(types, class_name)
 
-# Wrap all Client's relevant methods
-wrap(Methods)
+        if inspect.isclass(cls):
+            wrap_methods(cls)
+
+# Wrap all relevant methods in the Client's Methods class
+wrap_methods(Methods)
+
+# Wrap all relevant methods in the Rubino Client's Methods class
+wrap_methods(Rubino)
 
 # Wrap types' bound methods
-for class_name in dir(types):
-    if class_name in ['Updates', 'Results']:
-        continue
-
-    cls = getattr(types, class_name)
-
-    if inspect.isclass(cls):
-        wrap(cls)
-
-# # Special case for idle and compose, because they are not inside Methods
-# async_to_sync(idle_module, "idle")
-# idle = getattr(idle_module, "idle")
-
-# async_to_sync(compose_module, "compose")
-# compose = getattr(compose_module, "compose")
+wrap_types_methods()

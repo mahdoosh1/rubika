@@ -1,13 +1,17 @@
 from .sessions import SQLiteSession, StringSession
 from .parser import Markdown
 from .methods import Methods
-from typing import Optional, Union
+from typing import Optional, Union, Literal
+from . import __name__ as logger_name
+import logging
+import rubpy
+import time
 
 
 class Client(Methods):
     DEFAULT_PLATFORM = {
         'app_name': 'Main',
-        'app_version': '4.4.6',
+        'app_version': '4.4.9',
         'platform': 'Web',
         'package': 'web.rubika.ir',
         }
@@ -27,15 +31,60 @@ class Client(Methods):
                  user_agent: Optional[str] = None or USER_AGENT,
                  timeout: Optional[Union[str, int]] = 20,
                  lang_code: Optional[str] = 'fa',
-                 parse_mode: Optional[str] = 'All',
+                 parse_mode: Optional[str] = None,
+                 proxy: str = None,
+                 logger: "logging.Logger" = None,
+                 display_welcome: bool = True,
+                 platform: Literal['Web', 'Android'] = 'Web',
     ) -> None:
+        """Client
+            Args:
+                - name (`str` | `rubpy.sessions.StringSession`):
+                    The file name of the session file that is used
+                    if there is a string Given (may be a complete path)
+                    or it could be a string session
+                    [rubpy.sessions.StringSession]
+                
+                - auth (`str`, optional): To set up auth
+                - private_key (`str`, optional): To set up private key
+                - bot_token (`str`, optional): To set up bot token
+                - phone_number (`str`, optional): To set up phone number
+
+                - proxy (`str`, optional):
+                    To set up a proxy, example:
+                        proxy='http://127.0.0.1:80'
+
+                - parse_mode (`bool`, optional):
+                    To set the parse mode `` default( `None` ) ``
+
+                - user_agent (`str`, optional):
+                    Client uses the web version, You can set the usr-user_agent
+
+                - timeout (`int` | `float`, optional):
+                    To set the timeout `` default( `20 seconds` )``
+
+                - logger (`logging.Logger`, optional):
+                    Logger base for use.
+
+                - lang_code(`str`, optional):
+                    To set the lang_code `` default( `fa` ) ``
+
+                - display_welcome (`bool`, optional):
+                    To set the display welcome `` default( `True` ) ``
+        """
         super().__init__()
+
+        if platform.lower() == 'android':
+            self.DEFAULT_PLATFORM['platform'] = 'Android'
+
         if auth and not isinstance(auth, str):
             raise ValueError('`auth` is `string` arg.')
 
-        if private_key:
-            if not type(private_key) in (str, bytes):
-                raise ValueError('`private_key` is `string` or `bytes` arg.')
+        if isinstance(private_key, str):
+            if not private_key.startswith('-----BEGIN RSA PRIVATE KEY-----'):
+                private_key = '-----BEGIN RSA PRIVATE KEY-----\n' + private_key
+            if not private_key.startswith('\n-----END RSA PRIVATE KEY-----'):
+                private_key += '\n-----END RSA PRIVATE KEY-----'
 
         if bot_token and not isinstance(bot_token, str):
             raise ValueError('`bot_token` is `string` arg.')
@@ -56,36 +105,53 @@ class Client(Methods):
             raise TypeError('The given session must be a '
                             'str or [rubpy.sessions.StringSession]')
 
-        if parse_mode not in ('All', 'html', 'markdown', 'mk'):
-            raise ValueError('The `parse_mode` argument can only be in `("All", "html", "markdown", "mk")`.')
+        if parse_mode not in (None, 'html', 'markdown', 'mk'):
+            raise ValueError('The `parse_mode` argument can only be in `("html", "markdown", "mk")`.')
+        elif parse_mode is not None:
+            parse_mode = parse_mode.lower()
+        else:
+            parse_mode = 'markdown'
 
+        if not isinstance(logger, logging.Logger):
+            logger = logging.getLogger(logger_name)
+    
         self.DEFAULT_PLATFORM['lang_code'] = lang_code
         self.name = name
         self.auth = auth
+        self.logger = logger
         self.private_key = private_key
         self.bot_token = bot_token
         self.phone_number = phone_number
+        self.display_welcome = display_welcome
         self.user_agent = user_agent
         self.lang_code = lang_code
         self.timeout = timeout
         self.session = session
         self.parse_mode = parse_mode
+        self.proxy = proxy
         self.markdown = Markdown()
         self.database = None
         self.decode_auth = None
         self.import_key = None
+        self.is_sync = False
         self.guid = None
         self.key = None
         self.handlers = {}
 
-    def __enter__(self):
+        if self.display_welcome:
+            for char in rubpy.__welcome__:
+                print(char, sep='', end='', flush=True)
+                time.sleep(0.01)
+
+    def __enter__(self) -> "Client":
         return self.start()
 
     def __exit__(self, *args, **kwargs):
         try:
             return self.disconnect()
-        except Exception as exc:
-            print(exc.__name__, exc)
+
+        except Exception:
+            pass
 
     async def __aenter__(self):
         return await self.start()
@@ -93,5 +159,6 @@ class Client(Methods):
     async def __aexit__(self, *args, **kwargs):
         try:
             return await self.disconnect()
-        except Exception as exc:
-            print(exc.__name__, exc)
+
+        except Exception:
+            pass

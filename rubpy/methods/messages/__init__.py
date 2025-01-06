@@ -9,7 +9,7 @@ from .get_poll_option_voters import GetPollOptionVoters
 from .get_poll_status import GetPollStatus
 from .request_send_file import RequestSendFile
 from .send_message import SendMessage
-from .send_document import SendDocmuent
+from .send_document import SendDocument
 from .send_gif import SendGif
 from .send_music import SendMusic
 from .send_video import SendVideo
@@ -23,6 +23,7 @@ from .reaction import Reaction
 from .remove_reaction import RemoveReaction
 from .get_message_share_url import GetMessageShareUrl
 from .get_messages_updates import GetMessagesUpdates
+from .send_sticker import SendSticker
 
 
 class Messages(
@@ -39,7 +40,7 @@ class Messages(
         SendMessage,
         SetPinMessage,
         VotePoll,
-        SendDocmuent,
+        SendDocument,
         SendGif,
         SendMusic,
         SendVideo,
@@ -51,5 +52,6 @@ class Messages(
         Reaction,
         GetMessageShareUrl,
         GetMessagesUpdates,
+        SendSticker,
 ):
         pass
