@@ -1,12 +1,10 @@
-import sys
-import difflib
-import inspect
-import warnings
 import asyncio
-from .types import SocketResults
+import sys
+from typing import Type, List, Dict, Any, Optional
+from .types import Update
 
-
-__handlers__ = [
+# لیست handlerهای مجاز
+AUTHORIZED_HANDLERS = [
     'ChatUpdates',
     'MessageUpdates',
     'ShowActivities',
@@ -14,83 +12,154 @@ __handlers__ = [
     'RemoveNotifications'
 ]
 
-def create(name, __base, authorise: list = [], exception: bool = True, *args, **kwargs):
-        result = None
-        if name in authorise:
-            result = name
+def create_handler(
+    name: str,
+    base: tuple,
+    authorized_handlers: List[str] = AUTHORIZED_HANDLERS,
+    exception: bool = True,
+    **kwargs
+) -> Optional[Type['BaseHandlers']]:
+    """
+    ایجاد دینامیک یک handler بر اساس نام و کلاس پایه.
 
-        else:
-            proposal = difflib.get_close_matches(name, authorise, n=1)
-            if proposal:
-                result = proposal[0]
-                caller = inspect.getframeinfo(inspect.stack()[2][0])
-                warnings.warn(
-                    f'{caller.filename}:{caller.lineno}: do you mean'
-                    f' "{name}", "{result}"? correct it')
+    پارامترها:
+    - name: نام handler.
+    - base: کلاس پایه برای handler.
+    - authorized_handlers: لیست نام‌های handlerهای مجاز.
+    - exception: آیا در صورت غیرمجاز بودن handler خطا پرتاب شود.
+    - kwargs: آرگومان‌های اضافی برای تنظیم کلاس.
 
-        if result is not None or not exception:
-            if result is None:
-                result = name
-            return type(result, __base, {'__name__': result, **kwargs})
+    خروجی:
+    کلاس handler ایجادشده یا None در صورت غیرمجاز بودن.
 
-        raise AttributeError(f'module has no attribute ({name})')
+    خطاها:
+    - AttributeError: اگر handler غیرمجاز باشد و exception=True.
+    """
+    if name in authorized_handlers:
+        return type(name, base, {'__name__': name, **kwargs})
+    
+    if not exception:
+        return None
+    
+    raise AttributeError(f"ماژول فاقد handler با نام '{name}' است")
 
+class BaseHandlers(Update):
+    """
+    کلاس پایه برای handlerهای سفارشی.
 
-class BaseHandlers(SocketResults):
+    پارامترها:
+    - models: لیست مدل‌های فیلتر.
+    - any_handler: آیا هر handler باید اجرا شود.
+    - kwargs: آرگومان‌های اضافی.
+    """
     __name__ = 'CustomHandlers'
 
-    def __init__(self, *models, __any: bool = False, **kwargs) -> None:
+    def __init__(self, *models: Any, any_handler: bool = False, **kwargs) -> None:
         self.__models = models
-        self.__any = __any
+        self.__any_handler = any_handler
 
-    def is_async(self, value, *args, **kwargs):
-        result = False
-        if asyncio.iscoroutinefunction(value):
-            result = True
+    def is_async(self, value: Any) -> bool:
+        """
+        بررسی اینکه آیا تابع داده‌شده ناهمگام (async) است.
 
-        elif asyncio.iscoroutinefunction(value.__call__):
-            result = True
+        پارامترها:
+        - value: تابع برای بررسی.
 
-        return result
+        خروجی:
+        True اگر تابع ناهمگام باشد، در غیر این صورت False.
+        """
+        return asyncio.iscoroutinefunction(value) or (hasattr(value, '__call__') and asyncio.iscoroutinefunction(value.__call__))
 
-    async def __call__(self, update: dict, *args, **kwargs) -> bool:
+    async def __call__(self, update: Dict, *args, **kwargs) -> bool:
+        """
+        اجرای handler روی آپدیت داده‌شده.
+
+        پارامترها:
+        - update: دیکشنری آپدیت.
+        - args: آرگومان‌های اضافی موقعیتی.
+        - kwargs: آرگومان‌های اضافی کلیدی.
+
+        خروجی:
+        True اگر handler باید اجرا شود، در غیر این صورت False.
+        """
         self.original_update = update
-        if self.__models:
-            for filter in self.__models:
-                if callable(filter):
-                    # if BaseModels is not called
-                    if isinstance(filter, type):
-                        filter = filter(func=None)
 
-                    if self.is_async(filter):
-                        status = await filter(self, result=None)
+        if not self.__models:
+            return True
 
-                    else:
-                        status = filter(self, result=None)
+        for handler_filter in self.__models:
+            # اگر handler_filter یک کلاس باشد، نمونه‌سازی می‌شود
+            filter_instance = handler_filter(func=None) if isinstance(handler_filter, type) else handler_filter
+            # بررسی ناهمگام یا همگام بودن فیلتر و اجرای آن
+            status = await filter_instance(self, result=None) if self.is_async(filter_instance) else filter_instance(self, result=None)
 
-                    if status and self.__any:
-                        return True
-
-                    elif not status:
-                        return False
+            if status and self.__any_handler:
+                return True
+            if not status:
+                return False
 
         return True
 
-
 class Handlers:
-    def __init__(self, name, *args, **kwargs) -> None:
+    """
+    کلاس برای مدیریت و ایجاد handlerهای خاص.
+    """
+    def __init__(self, name: str) -> None:
         self.__name__ = name
 
     def __eq__(self, value: object) -> bool:
-        return BaseHandlers in value.__bases__
+        """
+        بررسی برابری با کلاس پایه handlerها.
 
-    def __dir__(self):
-        return sorted(__handlers__)
+        پارامترها:
+        - value: مقداری برای بررسی.
 
-    def __call__(self, name, *args, **kwargs):
+        خروجی:
+        True اگر برابر با BaseHandlers باشد، در غیر این صورت False.
+        """
+        return BaseHandlers in getattr(value, '__bases__', ())
+
+    def __dir__(self) -> List[str]:
+        """
+        دریافت لیست handlerهای مجاز.
+
+        خروجی:
+        لیست مرتب‌شده handlerهای مجاز.
+        """
+        return sorted(AUTHORIZED_HANDLERS)
+
+    def __call__(self, name: str, *args, **kwargs) -> Type['BaseHandlers']:
+        """
+        فراخوانی handler بر اساس نام.
+
+        پارامترها:
+        - name: نام handler.
+        - args: آرگومان‌های اضافی موقعیتی.
+        - kwargs: آرگومان‌های اضافی کلیدی.
+
+        خروجی:
+        کلاس handler ایجادشده.
+        """
         return self.__getattr__(name)(*args, **kwargs)
 
-    def __getattr__(self, name):
-        return create(name, (BaseHandlers,), __handlers__)
+    def __getattr__(self, name: str) -> Type['BaseHandlers']:
+        """
+        دریافت handler ایجادشده دینامیک بر اساس نام.
 
+        پارامترها:
+        - name: نام handler.
+
+        خروجی:
+        کلاس handler ایجادشده.
+        """
+        return create_handler(name, (BaseHandlers,), AUTHORIZED_HANDLERS)
+
+# جایگزینی ماژول جاری با نمونه‌ای از Handlers
 sys.modules[__name__] = Handlers(__name__)
+
+# تعریف نوع‌های handler خاص
+ChatUpdates: Type[BaseHandlers]
+MessageUpdates: Type[BaseHandlers]
+ShowActivities: Type[BaseHandlers]
+ShowNotifications: Type[BaseHandlers]
+RemoveNotifications: Type[BaseHandlers]

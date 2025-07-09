@@ -16,6 +16,18 @@ system_versions = {
     }
 
 
+async def get_android(user_agent, lang_code, app_version, *args, **kwargs):
+    device_hash = '2'
+    return {
+        'token': '',
+        'lang_code': lang_code,
+        'token_type': 'Firebase',
+        'app_version': f'MA_{app_version}',
+        'system_version': 'SDK 22',
+        'device_model': 'samsungSM-G925F',
+        'device_hash': device_hash + ''.join(re.findall(r'\d+', user_agent))}
+
+
 async def get_browser(user_agent, lang_code, app_version, *args, **kwargs):
         device_model = re.search(r'(opera|chrome|safari|firefox|msie'
                                  r'|trident)\/(\d+)', user_agent.lower())
@@ -37,16 +49,20 @@ async def get_browser(user_agent, lang_code, app_version, *args, **kwargs):
         return {
             'token': '',
             'lang_code': lang_code,
-            'token_type': 'Web',
-            'app_version': f'WB_{app_version}',
+            'token_type': 'Firebase',
+            'app_version': f'PW_{app_version}',
             'system_version': system_version,
-            'device_model': device_model.title(),
+            'device_model': kwargs.get('device_model', device_model.title()),
             'device_hash': device_hash + ''.join(re.findall(r'\d+', user_agent))}
 
 
 class RegisterDevice:
-    async def register_device(self: "rubpy.Client"):
+    async def register_device(self: "rubpy.Client", *args, **kwargs):
         return await self.builder(name='registerDevice',
                                  input=await get_browser(self.user_agent,
                                                          self.lang_code,
-                                                         self.DEFAULT_PLATFORM.get('app_version')))
+                                                         self.DEFAULT_PLATFORM.get('app_version'),
+                                                         *args, **kwargs) if self.DEFAULT_PLATFORM['platform'] == 'PWA' else await get_android(self.user_agent,
+                                                         self.lang_code,
+                                                         self.DEFAULT_PLATFORM.get('app_version'),
+                                                         *args, **kwargs))

@@ -11,6 +11,7 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 from string import ascii_lowercase, ascii_uppercase
 
+
 class Crypto:
     AES_IV = b'\x00' * 16
 
