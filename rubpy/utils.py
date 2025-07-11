@@ -154,3 +154,12 @@ def HyperLink(text: str, link: str) -> str:
     :return: Hyperlink formatted text.
     """
     return f'[{text.strip()}]({link.strip()})'
+
+def Pre(text: str) -> str:
+    """
+    Format the text as pre (code block).
+
+    :param text: Input text to be formatted.
+    :return: Pre formatted text.
+    """
+    return f'```{text.strip()}```'
